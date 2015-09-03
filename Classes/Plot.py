@@ -4,9 +4,19 @@ import matplotlib.pyplot as plt
 import urllib2
 import psycopg2
 import ast
-from Config import redshift
+from configparser import ConfigParser
 import datetime
 import numpy as np
+
+
+HOME = '/media/sf_Lu_Wang/'
+creds = ConfigParser() 
+creds.read(HOME + 'databases.conf') 
+
+
+# coding: utf-8
+# In[519]:
+
 # In[521]:
 sending_table = np.genfromtxt('silver_24hours.txt', delimiter=',')
 # In[522]:
@@ -42,10 +52,7 @@ x_h = [0]
 for i in range(np.shape(sending_result)[0]-1):
     x = np.hstack((x,x[i]+sending_result[i][0]))
 h = 3600
-
-var = max(x)
-#while h is less than the cumulative time 
-while h <  var: ####Bug to be fixed ####
+while h <  max(x): ####Bug to be fixed ####
     x_h = np.hstack((x_h,h))
     h += 3600
 # In[549]:
@@ -80,8 +87,7 @@ ax.legend( (rects1[0], rects2[0]), (len(sending_table[sending_table[:,3]==1]), l
 ax.set_title('silverroller.com 24 hour sends',y=1.08) #change title#
 ax.set_xlabel(r"seconds")
 ax.set_ylim(0,400)
-timerange = 86400 
-ax.set_xlim(0,timerange) ## Bug to be fixed ###########
+ax.set_xlim(0,86400) ## Bug to be fixed ###########
 ax2.set_xticks(x_h)
 ax2.set_xticklabels(x_ah)
 ax2.set_xlabel(r"time (in 24-hour)")

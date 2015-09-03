@@ -20,7 +20,7 @@ def profile(username): pass
 def images(type='sample'):
 	
 	img_dir = app.static_folder +'images/'
-	print img_dir
+	print(img_dir)
 	images = []
 
 	for root, dirs, files in os.walk('./Static/images', topdown=False):
@@ -32,9 +32,9 @@ def images(type='sample'):
 	return rendered_html
 	
 with app.test_request_context(): 
-	print url_for('index')
-	print url_for('login', next='arg')	
-	print url_for('profile', username='John Doe')
+	print(url_for('index'))
+	print(url_for('login', next='arg'))
+	print(url_for('profile', username='John Doe'))
 
 if __name__=='__main__': 
 	app.run() 
