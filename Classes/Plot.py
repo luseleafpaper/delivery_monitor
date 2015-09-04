@@ -13,28 +13,30 @@ def main():
 	con.speak()
 	plot = Plot()
 	plot.speak()
-	plot.set_campaign('amber%')
-	plot.set_lookback_duration(48)
-	plot.fetch_data(con)
-	plot.generate_plot()
+	campaigns = ['amber%', 'silver%', 'tele%'] 
+	for c in campaigns: 
+		plot.set_campaign(c)
+		plot.set_lookback_duration(48)
+		plot.set_end_point(20)
+		plot.fetch_data(con)
+		plot.generate_plot()
 	
 class Plot: 
 	def __init__(self):
-		self.data = None
 		pass
 		
 	def speak(self): 
 		print("I'm a Plot object")
 	
-	def set_start_point(self, start_point='now'): 
-		self.start_point = start_point
+	def set_end_point(self, rollback=0): 
+		self.end_point = datetime.datetime.now() - timedelta(hours=rollback)
 	
 	def set_lookback_duration(self, duration=24):
 		self.duration = duration
 		
 	def get_range(self): 
-		start_point = datetime.datetime.now() - timedelta(hours=self.duration)
-		end_point = datetime.datetime.now()
+		start_point = self.end_point - timedelta(hours=self.duration)
+		end_point = self.end_point
 		return start_point, end_point
 	
 	def get_campaign(self): 
@@ -192,7 +194,7 @@ class Plot:
 		# In[66]:
 
 		#plt.show()
-		plt.savefig('../Static/images/%s.png' % self.campaign)
+		plt.savefig('/media/sf_Shared_Folders/delivery_monitor/Static/images/%s.png' % self.campaign)
 		
 
 

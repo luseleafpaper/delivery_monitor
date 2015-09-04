@@ -1,6 +1,7 @@
 from flask import Flask, url_for
 from flask import render_template
 from Classes.Connection import Connection
+from Classes.Plot import Plot
 import os
 
 app = Flask(__name__)
@@ -23,12 +24,12 @@ def images(type='sample'):
 	print(img_dir)
 	images = []
 
-	for root, dirs, files in os.walk('./Static/images', topdown=False):
+	for root, dirs, files in os.walk('/media/sf_Shared_Folders/delivery_monitor/Static/images', topdown=False):
 		for name in files:
 			print(os.path.join(img_dir, name))
 			images.append('./static/images/'+name)
-		
-	rendered_html = render_template('test.html', images=images)
+	ph = 'a string'
+	rendered_html = render_template('test.html', images=images, placeholder = ph )
 	return rendered_html
 	
 with app.test_request_context(): 

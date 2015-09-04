@@ -34,7 +34,8 @@ class Connection:
 			for record in self.cur:
 				line = ','.join([str(r) for r in record]) + '\n' 
 				fp.write(line)
-		
+	def speak(self): 
+		print("I'm a Connection object connected to ", self.database)
 
 if __name__=='__main__': 
 	c = Connection('piston2')
