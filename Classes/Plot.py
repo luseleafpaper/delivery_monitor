@@ -11,18 +11,18 @@ def main():
 	print("In main")
 	con = Connection("piston2")
 	con.speak()
-	plot = Plot()
+	plot = Plot(con)
 	plot.speak()
 	campaigns = ['amber%', 'silver%', 'tele%'] 
 	for c in campaigns: 
 		plot.set_campaign(c)
-		plot.set_lookback_duration(48)
-		plot.set_end_point(20)
-		plot.fetch_data(con)
+		plot.set_lookback_duration(80)
+		plot.set_end_point(0)
 		plot.generate_plot()
 	
 class Plot: 
-	def __init__(self):
+	def __init__(self, connection):
+		self.connection = connection
 		pass
 		
 	def speak(self): 
@@ -44,8 +44,35 @@ class Plot:
 	
 	def set_campaign(self, campaign):
 		self.campaign = campaign
-
-	def fetch_data(self, connection): 
+		
+	def fetch_open_data(self): 
+		start_point, end_point = self.get_range()
+		campaign_name = self.get_campaign()
+		query = """
+		SELECT
+			  send_ts::date,
+			  DATE_PART('hour',send_ts),
+			  sending_domain,
+			  COUNT(s.message_token) AS sends,
+			  COUNT(o.message_token) AS opens,
+			  COUNT(DISTINCT o.message_token) / COUNT(DISTINCT s.message_token)::float *100 AS open_percent
+		FROM sends s
+		LEFT JOIN opens o ON o.message_token = s.message_token
+		WHERE (send_ts-interval '4 hours') > to_timestamp('%s', 'YYYY-MM-DD HH24-MI-SS') and (send_ts-interval '4 hours') <= to_timestamp('%s', 'YYYY-MM-DD HH24-MI-SS') 
+		and sending_domain like '%s'
+		and send_status = 1
+		GROUP BY 1
+				,2
+				,3
+		ORDER BY 1
+				,2
+				,3 
+		;
+		""" %(start_point,end_point,campaign_name)
+		data = self.connection.fetchall(query)
+		return data 
+	
+	def fetch_send_data(self): 
 		start_point, end_point = self.get_range()
 		campaign_name = self.get_campaign()
 		query = """
@@ -63,12 +90,12 @@ class Plot:
 			and (campaign like '%s' )
 			order by 2;
 			""" %(start_point,start_point,start_point, end_point, campaign_name)
-		data = connection.fetchall(query)
-		self.data = data 
+		data = self.connection.fetchall(query)
 		return data 
 
 	def generate_plot(self, data=None): 
-		sending_table = self.data 
+		sending_table = self.fetch_send_data()
+		open_table = self.fetch_open_data()
 		start_point, end_point = self.get_range()
 		campaign_name = self.get_campaign()
 
@@ -188,7 +215,7 @@ class Plot:
 
 		# In[65]:
 
-		fig.set_size_inches(28,12)
+		fig.set_size_inches(12*self.duration/24,12)
 
 
 		# In[66]:
