@@ -28,8 +28,8 @@ def images(type='sample'):
 		for name in files:
 			print(os.path.join(img_dir, name))
 			images.append('./static/images/'+name)
-	ph = 'a string'
-	rendered_html = render_template('test.html', images=images, placeholder = ph )
+	
+	rendered_html = render_template('test.html', images=images )
 	return rendered_html
 	
 with app.test_request_context(): 

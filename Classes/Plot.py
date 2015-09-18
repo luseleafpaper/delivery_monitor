@@ -16,7 +16,7 @@ def main():
 	campaigns = ['amber%', 'silver%', 'tele%'] 
 	for c in campaigns: 
 		plot.set_campaign(c)
-		plot.set_lookback_duration(80)
+		plot.set_lookback_duration(24)
 		plot.set_end_point(0)
 		plot.generate_plot()
 	
@@ -69,8 +69,27 @@ class Plot:
 				,3 
 		;
 		""" %(start_point,end_point,campaign_name)
-		data = self.connection.fetchall(query)
-		return data 
+		print query
+		open_table = self.connection.fetchall(query)
+		
+		open_table = np.asarray(open_table)
+
+		open_table[0]
+
+		for i in range(len(open_table)):
+			if (open_table[i,1]-4) < 0:
+				open_table[i,1] += 20
+			else:
+				open_table[i,1] += -4
+
+		trans = datetime.datetime.combine(open_table[0][0],datetime.time(int(open_table[0][1]))).hour- start_point.hour
+
+
+		# In[15]:
+
+		for i in range(len(open_table)):
+			open_table[i][1] = (i+trans)*3600
+		return open_table
 	
 	def fetch_send_data(self): 
 		start_point, end_point = self.get_range()
@@ -90,6 +109,7 @@ class Plot:
 			and (campaign like '%s' )
 			order by 2;
 			""" %(start_point,start_point,start_point, end_point, campaign_name)
+		print query
 		data = self.connection.fetchall(query)
 		return data 
 
@@ -152,48 +172,37 @@ class Plot:
 				num_def = 0
 				send_period_start = i+1
 				sending_result = np.vstack((sending_result,[sending_table[i+1][1] - sending_table[i][1],num_def,0]))
-
-
-		# In[60]:
-
-		fig, ax = plt.subplots()
+		# In[158]:
+		fig1,ax = plt.subplots()
 		ax2 = ax.twiny()
 		rects = np.empty((0,np.shape(sending_result)[0]), int)
 		x = [sending_table[0][1]]
-		x_h = [0]
-
-
-		# In[61]:
-
+		x_h = [start_point.minute*60]
+		# In[159]:
 		for i in range(np.shape(sending_result)[0]-1):
 			x = np.hstack((x,x[i]+sending_result[i][0]))
 		h = 3600
-		while h <= ((end_point-start_point).days)*86400+(end_point-start_point).seconds:
+		while h< ((end_point-start_point).days)*86400+(end_point-start_point).seconds:
 			x_h = np.hstack((x_h,h))
 			h += 3600
-
-
-		# In[62]:
-
+		# In[160]:
 		x_ah = x_h/3600+start_point.hour
-
-
-		# In[63]:
-
+		# In[161]:
 		while True in (x_ah>23):
 			for i in range(len(x_ah)):
 				if x_ah[i] > 23:
 					x_ah[i] = x_ah[i] - 24
 		x_ah = x_ah.astype(int)
-
-
-		# In[64]:
-
+		# In[162]:
 		def autolabel(rects):
 			# attach speed labels#
 			for rect in rects:
 				ax.text(rect.get_x()+rect.get_width()/2., 1.05*rect.get_height(), '1/%d' %int(rect.get_width()/rect.get_height()),ha='center', va='bottom')
 		i = 0
+		xmin = 0
+		xmax = (((end_point-start_point).days)*86400+(end_point-start_point).seconds)
+		ymin = 0
+		ymax = 400
 		while i < np.shape(sending_result)[0]:
 			if sending_result[i][2] == 1:
 				rects1 = ax.bar(x[i],sending_result[i][1], width=sending_result[i][0], color='b')
@@ -201,27 +210,76 @@ class Plot:
 			if sending_result[i][2] == 3:
 				rects2 = ax.bar(x[i],sending_result[i][1], width=sending_result[i][0], color='r')
 				autolabel(rects2)
-				
+				##if i+1 < (np.shape(sending_result)[0]-1):
+					#rects2 = ax.bar(x[i+1], sending_result[i+1][1], width=sending_result[i+1][0],color='r')
+					#autolabel(rects2)
+			#else:
+				#rects1 = ax.bar(x[i],sending_result[i][1], width=sending_result[i][0], color='r')
+				#autolabel(rects1)
+				#if i+1 < (np.shape(sending_result)[0]-1):
+					#rects2 = ax.bar(x[i+1], sending_result[i+1][1], width=sending_result[i+1][0],color='b')
+					#autolabel(rects2)
 			i += 1
-		ax.legend((rects1[0], rects2[0]), (len(np.asarray(sending_table)[np.asarray(sending_table)[:,3]=='1']), len(np.asarray(sending_table)[np.asarray(sending_table)[:,3]=='3'])))
-		ax.set_title('%s in %d day %d hour %d seconds plot from %s to %s' % (campaign_name,(end_point-start_point).days,(end_point-start_point).seconds/3600,(end_point-start_point).seconds%3600,datetime.datetime.strftime(start_point,"%Y-%m-%d %H:%M:%S"),datetime.datetime.strftime(end_point,"%Y-%m-%d %H:%M:%S")), y=1.08)#change title#
-		ax.set_xlabel(r"seconds")
-		ax.set_ylim(0,400)
-		ax.set_xlim(0,(((end_point-start_point).days)*86400+(end_point-start_point).seconds)) 
+		ax.legend((rects1[0], rects2[0]), (len(np.asarray(sending_table)[np.asarray(sending_table)[:,3]=='1']), len(np.asarray(sending_table)[np.asarray(sending_table)[:,3]=='3'])),bbox_to_anchor=(1.02, 1), loc=2, borderaxespad=0)
+		ax.set_title('%s sends in %d day %d hour %d seconds plot from %s to %s' % (campaign_name,(end_point-start_point).days,(end_point-start_point).seconds/3600,(end_point-start_point).seconds%3600,datetime.datetime.strftime(start_point,"%Y-%m-%d %H:%M:%S"),datetime.datetime.strftime(end_point,"%Y-%m-%d %H:%M:%S")), y=1.05)#change title#
+		ax.set_ylim(ymin,ymax)
+		ax.set_ylabel(r"volume")
+		ax.set_xlim(xmin,xmax) 
+		ax2.xaxis.tick_top()
+		ax2.yaxis.tick_right()
+		ax2.axis([xmin, xmax, ymin, ymax])
 		ax2.set_xticks(x_h)
 		ax2.set_xticklabels(x_ah)
 		ax2.set_xlabel(r"time (in 24-hour format)")
-
-
-		# In[65]:
-
-		fig.set_size_inches(12*self.duration/24,12)
-
-
-		# In[66]:
-
-		#plt.show()
-		plt.savefig('/media/sf_Shared_Folders/delivery_monitor/Static/images/%s.png' % self.campaign)
+		fig1.set_size_inches(12*self.duration/24+2,12)
+		plt.savefig('/media/sf_Shared_Folders/delivery_monitor/Static/images/sends-%s.png' % self.campaign)
+		plt.close()
+		# In[163]:
+		fig2,axc = plt.subplots()
+		xmin = 0
+		xmax = (((end_point-start_point).days)*86400+(end_point-start_point).seconds)
+		ymin = 0
+		ymax = 5000
+		ax3 = axc.twiny()
+		axc.plot(x[sending_result[:,2]==1],sending_result[sending_result[:,2]==1][:,0],'b^:',label="sending")
+		axc.plot(x[sending_result[:,2]==3],sending_result[sending_result[:,2]==3][:,0],'ro-',label="deferral")
+		axc.legend(bbox_to_anchor=(1.02, 1), loc=2, borderaxespad=0)
+		axc.set_title('%s duration in %d day %d hour %d seconds plot from %s to %s' % (campaign_name,(end_point-start_point).days,(end_point-start_point).seconds/3600,(end_point-start_point).seconds%3600,datetime.datetime.strftime(start_point,"%Y-%m-%d %H:%M:%S"),datetime.datetime.strftime(end_point,"%Y-%m-%d %H:%M:%S")), y=1.05)#change title#
+		axc.set_ylim(ymin,ymax)
+		axc.set_xlim(xmin,xmax)
+		ax3.xaxis.tick_top()
+		ax3.yaxis.tick_right()
+		ax3.axis([xmin, xmax, ymin, ymax])
+		ax3.set_xticks(x_h)
+		ax3.set_xticklabels(x_ah)
+		ax3.set_xlabel(r"time (in 24-hour format)")
+		axc.set_ylabel(r"duration in seconds")
+		fig2.set_size_inches(12*self.duration/24+2,12)
+		plt.savefig('/media/sf_Shared_Folders/delivery_monitor/Static/images/duration-%s.png' % self.campaign)
+		plt.close()
+		# In[164]:
+		fig3,axo = plt.subplots()
+		xmin = 0
+		xmax = (((end_point-start_point).days)*86400+(end_point-start_point).seconds)
+		ymin = 0
+		ymax = 7
+		ax4 = axo.twiny()
+		axo.plot(open_table[:,1],open_table[:,5],'g*--',label = "open rate")
+		axo.set_xlabel(r"seconds")
+		axo.set_ylabel(r"open rate")
+		axo.legend(bbox_to_anchor=(1.02, 1), loc=2, borderaxespad=0)
+		axo.set_title('%s opens in %d day %d hour %d seconds plot from %s to %s' % (campaign_name,(end_point-start_point).days,(end_point-start_point).seconds/3600,(end_point-start_point).seconds%3600,datetime.datetime.strftime(start_point,"%Y-%m-%d %H:%M:%S"),datetime.datetime.strftime(end_point,"%Y-%m-%d %H:%M:%S")), y=1.05)#change title#
+		axo.set_ylim(ymin,ymax)
+		axo.set_xlim(xmin,xmax)
+		ax4.xaxis.tick_top()
+		ax4.yaxis.tick_right()
+		ax4.axis([xmin, xmax, ymin, ymax])
+		ax4.set_xticks(x_h)
+		ax4.set_xticklabels(x_ah)
+		ax4.set_xlabel(r"time (in 24-hour format)")
+		fig3.set_size_inches(12*self.duration/24+2,12)
+		plt.savefig('/media/sf_Shared_Folders/delivery_monitor/Static/images/opens-%s.png' % self.campaign)
+		plt.close()
 		
 
 
