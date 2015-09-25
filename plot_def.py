@@ -1,8 +1,9 @@
 
 # coding: utf-8
 
-# In[1]:
-
+# In[514]:
+import matplotlib as mpl
+mpl.use('Agg')
 import matplotlib.pyplot as plt
 import urllib2
 import psycopg2
@@ -11,9 +12,11 @@ from Config import piston
 import datetime
 import numpy as np
 import datetime
+import sys
+import pandas as pd
+from Setting import time_window as tw
 
-
-# In[2]:
+# In[515]:
 
 con = psycopg2.connect( 
 	dbname= piston['dbname'],
@@ -24,24 +27,25 @@ con = psycopg2.connect(
 )
 
 
-# In[3]:
+# In[516]:
 
 print "database is connected"
 cur = con.cursor()
 
 
-# In[4]:
+# In[614]:
 
-i = str(raw_input('from:(like 2015-09-01 00:09:00) \t'))
+i = str(tw['start_point'])
+#i = str(raw_input('from:(like 2015-09-01 00:09:00) \t'))  ################ read date and time input#################### 
 try:
     start_point = datetime.datetime.strptime(i, '%Y-%m-%d %H:%M:%S')
 except ValueError:
     print "Incorrect format"
 
 
-# In[5]:
-
-i = str(raw_input('to:(like 2015-09-01 00:09:00 or type now) \t'))
+# In[615]:
+i = str(tw['end_point'])
+#i = str(raw_input('to:(like 2015-09-01 00:09:00 or type now) \t'))
 if i == 'now' or i =='Now':
     end_point = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     end_point = datetime.datetime.strptime(end_point, '%Y-%m-%d %H:%M:%S')
@@ -52,21 +56,21 @@ else:
         print "Incorrect format"
 
 
-# In[6]:
+# In[616]:
 
-if (end_point-start_point).days < 0 or (end_point-start_point).seconds < 0 :
+if (end_point - start_point).days < 0 or (end_point - start_point).seconds < 0 : 
     sys.exit("aa! errors!")
-print 'Plot duration is %d day %d hour %d seconds' % ((end_point-start_point).days,(end_point-start_point).seconds/3600,(end_point-start_point).seconds%3600)
+print 'Plot duration is %d day %d hour %d seconds' % ((end_point - start_point).days,(end_point - start_point).seconds/3600,(end_point - start_point).seconds%3600)
 end_point = datetime.datetime.strftime(end_point,"%Y-%m-%d %H:%M:%S")
 start_point = datetime.datetime.strftime(start_point, '%Y-%m-%d %H:%M:%S')
 
 
-# In[7]:
+# In[617]:
+campaign_name = str((sys.argv[1]+'%'))
+#campaign_name = str(raw_input('Campaign name:\t'))
 
-campaign_name = str(raw_input('Campaign name:\t'))
 
-
-# In[8]:
+# In[618]:
 
 query = """
 select
@@ -77,24 +81,71 @@ EXTRACT(EPOCH FROM ((send_ts-interval '4 hours')- to_timestamp('%s', 'YYYY-MM-DD
 DATE_PART('hour',send_ts)-4 as hour,
 DATE_PART('minute',send_ts) as minute   
 from sends
-WHERE (send_ts-interval '4 hours') > to_timestamp('%s', 'YYYY-MM-DD HH24-MI-SS') and 
- (send_ts-interval '4 hours') < to_timestamp('%s', 'YYYY-MM-DD HH24-MI-SS') 
+WHERE (send_ts-interval '4 hours') > to_timestamp('%s', 'YYYY-MM-DD HH24-MI-SS') and (send_ts-interval '4 hours') <= to_timestamp('%s', 'YYYY-MM-DD HH24-MI-SS') 
 and send_status in (1, 3)
 and (campaign like '%s' )
 order by 2;
-""" %(start_point,start_point,start_point, end_point, campaign_name)
+""" %(start_point,start_point,start_point,end_point,campaign_name)
 cur.execute(query)
 con.commit()
 sending_table = cur.fetchall()
 
 
-# In[9]:
+# In[619]:
+
+query1 = """
+SELECT
+      send_ts::date,
+      DATE_PART('hour',send_ts),
+      sending_domain,
+      COUNT(s.message_token) AS sends,
+      COUNT(o.message_token) AS opens,
+      COUNT(DISTINCT o.message_token) / COUNT(DISTINCT s.message_token)::float *100 AS open_percent
+FROM sends s
+LEFT JOIN opens o ON o.message_token = s.message_token
+WHERE (send_ts-interval '4 hours') > to_timestamp('%s', 'YYYY-MM-DD HH24-MI-SS') and (send_ts-interval '4 hours') <= to_timestamp('%s', 'YYYY-MM-DD HH24-MI-SS') 
+and sending_domain like '%s'
+and send_status = 1
+GROUP BY 1
+        ,2
+        ,3
+ORDER BY 1
+        ,2
+        ,3 
+;
+""" %(start_point,end_point,campaign_name)
+cur.execute(query1)
+con.commit()
+open_table = cur.fetchall()
+
+
+# In[620]:
+
+open_table = np.asarray(open_table)
+
+# In[622]:
+
+for i in range(len(open_table)):
+    open_table[i][0] = datetime.datetime.combine(open_table[i][0],datetime.time(int(open_table[i][1]))) - datetime.timedelta(hours=4)
+
+# In[623]:
 
 end_point = datetime.datetime.strptime(end_point,"%Y-%m-%d %H:%M:%S")
 start_point = datetime.datetime.strptime(start_point, '%Y-%m-%d %H:%M:%S')
 
 
-# In[10]:
+# In[624]:
+
+trans = (open_table[0][0]- start_point).total_seconds()
+
+
+# In[625]:
+
+for i in range(len(open_table)):
+    diff =  open_table[i][0] - open_table[0][0]
+    open_table[i][1] = diff.total_seconds()+trans
+
+# In[626]:
 
 send_period_start = 0
 def_period_start = 0
@@ -149,16 +200,17 @@ for i in range(len(sending_table)-1):
         sending_result = np.vstack((sending_result,[sending_table[i+1][1] - sending_table[i][1],num_def,0]))
 
 
-# In[60]:
+# In[718]:
 
-fig, ax = plt.subplots()
+fig, (ax,axc,axo) = plt.subplots(nrows=3, sharex=True)
 ax2 = ax.twiny()
+ax4 = axo.twiny()
 rects = np.empty((0,np.shape(sending_result)[0]), int)
 x = [sending_table[0][1]]
-x_h = [0]
+x_h = [start_point.minute*60]
 
 
-# In[61]:
+# In[719]:
 
 for i in range(np.shape(sending_result)[0]-1):
     x = np.hstack((x,x[i]+sending_result[i][0]))
@@ -168,12 +220,12 @@ while h <= ((end_point-start_point).days)*86400+(end_point-start_point).seconds:
     h += 3600
 
 
-# In[62]:
+# In[720]:
 
 x_ah = x_h/3600+start_point.hour
 
 
-# In[63]:
+# In[721]:
 
 while True in (x_ah>23):
     for i in range(len(x_ah)):
@@ -182,13 +234,17 @@ while True in (x_ah>23):
 x_ah = x_ah.astype(int)
 
 
-# In[64]:
+# In[722]:
 
 def autolabel(rects):
     # attach speed labels#
     for rect in rects:
         ax.text(rect.get_x()+rect.get_width()/2., 1.05*rect.get_height(), '1/%d' %int(rect.get_width()/rect.get_height()),ha='center', va='bottom')
 i = 0
+xmin = 0
+xmax = (((end_point-start_point).days)*86400+(end_point-start_point).seconds)
+ymin = 0
+ymax = 400
 while i < np.shape(sending_result)[0]:
     if sending_result[i][2] == 1:
         rects1 = ax.bar(x[i],sending_result[i][1], width=sending_result[i][0], color='b')
@@ -206,28 +262,50 @@ while i < np.shape(sending_result)[0]:
             #rects2 = ax.bar(x[i+1], sending_result[i+1][1], width=sending_result[i+1][0],color='b')
             #autolabel(rects2)
     i += 1
-ax.legend((rects1[0], rects2[0]), (len(np.asarray(sending_table)[np.asarray(sending_table)[:,3]=='1']), len(np.asarray(sending_table)[np.asarray(sending_table)[:,3]=='3'])))
-ax.set_title('%s in %d day %d hour %d seconds plot from %s to %s' % (campaign_name,(end_point-start_point).days,(end_point-start_point).seconds/3600,(end_point-start_point).seconds%3600,datetime.datetime.strftime(start_point,"%Y-%m-%d %H:%M:%S"),datetime.datetime.strftime(end_point,"%Y-%m-%d %H:%M:%S")), y=1.08)#change title#
-ax.set_xlabel(r"seconds")
-ax.set_ylim(0,400)
-ax.set_xlim(0,(((end_point-start_point).days)*86400+(end_point-start_point).seconds)) 
+ax.legend((rects1[0], rects2[0]), (len(np.asarray(sending_table)[np.asarray(sending_table)[:,3]=='1']), len(np.asarray(sending_table)[np.asarray(sending_table)[:,3]=='3'])),bbox_to_anchor=(1.02, 1), loc=2, borderaxespad=0)
+ax.set_title('%s in %d day %d hour %d seconds plot from %s to %s' % (campaign_name,(end_point-start_point).days,(end_point-start_point).seconds/3600,(end_point-start_point).seconds%3600,datetime.datetime.strftime(start_point,"%Y-%m-%d %H:%M:%S"),datetime.datetime.strftime(end_point,"%Y-%m-%d %H:%M:%S")), y=1.2)#change title#
+ax.set_ylim(ymin,ymax)
+ax.set_ylabel(r"volume")
+ax.grid(True)
+ax.set_xlim(xmin,xmax)
+ax2.xaxis.tick_top()
+ax2.yaxis.tick_right()
+ax2.axis([xmin, xmax, ymin, ymax])
 ax2.set_xticks(x_h)
 ax2.set_xticklabels(x_ah)
 ax2.set_xlabel(r"time (in 24-hour format)")
+line1 = axc.plot(x[sending_result[:,2]==1],sending_result[sending_result[:,2]==1][:,0],'b^:',label="sending")
+line2 = axc.plot(x[sending_result[:,2]==3],sending_result[sending_result[:,2]==3][:,0],'ro-',label="deferral")
+axc.legend(bbox_to_anchor=(1.02, 1), loc=2, borderaxespad=0)
+axc.set_ylim(0,5000)
+axc.set_ylabel(r"duration in seconds")
+axc.grid(True)
+axo.plot(open_table[:,1],open_table[:,5],'g*--',label = "open rate")
+axo.set_xlabel(r"seconds")
+axo.set_ylabel(r"open rate")
+axo.legend(bbox_to_anchor=(1.02, 1), loc=2, borderaxespad=0)
+xmin = 0
+xmax = (((end_point-start_point).days)*86400+(end_point-start_point).seconds)
+ymin = 0
+ymax = 7
+axo.set_ylim(ymin,ymax)
+axo.set_xlim(xmin,xmax)
+axo.grid(True)
+ax4.xaxis.tick_top()
+ax4.yaxis.tick_right()
+ax4.axis([xmin, xmax, ymin, ymax])
+ax4.set_xticks(x_h)
+ax4.set_xticklabels(x_ah)
 
 
-# In[65]:
+# In[723]:
 
-fig.set_size_inches(28,12)
+fig.set_size_inches(30,15)
 
 
-# In[66]:
-
-#plt.show()
-plt.savefig('images/test.png')
-
-# plt.show()
-# plt.savefig('test.png')
+# In[724]:
+plt.savefig('images/%s from %s to %s.png' %(campaign_name,datetime.datetime.strftime(start_point,"%Y-%m-%d %H:%M:%S"),datetime.datetime.strftime(end_point,"%Y-%m-%d %H:%M:%S")))
+plt.close()
 
 
 # In[ ]:
